@@ -37,7 +37,11 @@ jobs:
             # 配置变量
             PROJECT_PATH="${{ secrets.REMOTE_PROJECT_PATH }}"
             BRANCH="zww"
-            LOG_FILE="/tmp/deploy-$(date +%Y%m%d-%H%M%S).log"
+            LOG_DIR="/tmp/FlowiseLogs"
+            LOG_FILE="$LOG_DIR/deploy-$(date +%Y%m%d-%H%M%S).log"
+            
+            # 创建日志目录
+            mkdir -p "$LOG_DIR"
             
             # 日志函数
             log() {
@@ -103,18 +107,18 @@ jobs:
             
             log "项目构建完成"
             
-            # 检查appStart.sh是否存在
-            if [ ! -f "appStart.sh" ]; then
-                log "错误: appStart.sh 文件不存在"
+            # 检查app_start.sh是否存在
+            if [ ! -f "app_start.sh" ]; then
+                log "错误: app_start.sh 文件不存在"
                 exit 1
             fi
             
             # 确保appStart.sh有执行权限
-            chmod +x appStart.sh
+            #chmod +x appStart.sh
             
             # 启动应用
             log "启动应用..."
-            ./appStart.sh start || {
+            ./app_start.sh restart || {
                 log "错误: 应用启动失败"
                 exit 1
             }
@@ -127,18 +131,3 @@ jobs:
             log "提交: ${{ github.sha }}"
             log "部署时间: $(date)"
             log "日志文件: $LOG_FILE"
-            
-            # 显示应用状态（如果appStart.sh支持status命令）
-            if ./appStart.sh status 2>/dev/null; then
-                log "应用状态检查完成"
-            fi
-            
-            log "部署流程结束"
-            EOF
-            
-            # 设置执行权限并运行部署脚本
-            chmod +x /tmp/deploy-script.sh
-            bash /tmp/deploy-script.sh
-            
-            # 清理临时文件
-            rm -f /tmp/deploy-script.sh
