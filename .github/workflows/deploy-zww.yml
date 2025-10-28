@@ -135,3 +135,10 @@ jobs:
             
             log "部署流程结束"
 EOF
+            
+            # 设置执行权限并运行部署脚本
+            chmod +x /tmp/deploy-script.sh
+            bash /tmp/deploy-script.sh
+            
+            # 清理临时文件
+            rm -f /tmp/deploy-script.sh
