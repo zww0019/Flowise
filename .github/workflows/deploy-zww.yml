@@ -60,4 +60,4 @@ jobs:
             bash /tmp/deploy-script.sh
             
             # 清理临时文件
-            rm -f /tmp/deploy-script.sh
+            #rm -f /tmp/deploy-script.sh
