@@ -104,8 +104,8 @@ jobs:
             log "项目构建完成"
             
             # 检查app_start.sh是否存在
-            if [ ! -f "app_start.sh" ]; then
-                log "错误: app_start.sh 文件不存在"
+            if [ ! -f "app_restart.sh" ]; then
+                log "错误: app_restart.sh 文件不存在"
                 exit 1
             fi
             
@@ -114,7 +114,7 @@ jobs:
             
             # 启动应用
             log "启动应用..."
-            ./app_start.sh restart || {
+            ./app_restart.sh restart || {
                 log "错误: 应用启动失败"
                 exit 1
             }
@@ -127,11 +127,6 @@ jobs:
             log "提交: ${{ github.sha }}"
             log "部署时间: $(date)"
             log "日志文件: $LOG_FILE"
-            
-            # 显示应用状态（如果appStart.sh支持status命令）
-            if ./appStart.sh status 2>/dev/null; then
-                log "应用状态检查完成"
-            fi
             
             log "部署流程结束"
             EOF
