@@ -69,7 +69,7 @@ log "依赖安装完成"
 
 # 构建项目
 log "构建项目..."
-pnpm build || {
+NODE_OPTIONS="--max_old_space_size=4096" pnpm build || {
     log "错误: pnpm build 失败"
     exit 1
 }
