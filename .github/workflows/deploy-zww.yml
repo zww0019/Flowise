@@ -1,0 +1,63 @@
+name: Deploy zww branch to remote server
+
+on:
+  push:
+    branches:
+      - zww
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.15.0'
+          cache: 'pnpm'
+          cache-dependency-path: 'pnpm-lock.yaml'
+          
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.4
+          
+      - name: Install dependencies
+        run: pnpm install
+        
+      - name: Build project
+        run: pnpm build
+        env:
+          NODE_OPTIONS: '--max_old_space_size=4096'
+          
+      - name: Upload deployment script
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USERNAME }}
+          password: ${{ secrets.REMOTE_PASSWORD }}
+          port: ${{ secrets.REMOTE_PORT || 22 }}
+          source: ".github/workflows/deploy-script.sh"
+          target: "/tmp/"
+          
+      - name: Deploy to remote server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USERNAME }}
+          password: ${{ secrets.REMOTE_PASSWORD }}
+          port: ${{ secrets.REMOTE_PORT || 22 }}
+          script: |
+            # 设置执行权限并运行部署脚本
+            chmod +x /tmp/deploy-script.sh
+            bash /tmp/deploy-script.sh
+            
+            # 清理临时文件
+            rm -f /tmp/deploy-script.sh
