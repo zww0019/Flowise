@@ -16,16 +16,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9.0.4
-          
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18.15.0'
           
       - name: Deploy to remote server
         uses: appleboy/ssh-action@v1.0.3
@@ -91,6 +81,10 @@ jobs:
             
             log "代码更新完成"
             
+            # 确保pnpm在PATH中
+            export PATH="/root/.nvm/versions/node/v20.19.4/bin:$PATH"
+            which pnpm || echo "pnpm not found in PATH, expected at /root/.nvm/versions/node/v20.19.4/bin/pnpm"
+
             # 安装依赖
             log "安装依赖..."
             pnpm install || {
