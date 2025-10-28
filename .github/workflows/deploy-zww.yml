@@ -134,7 +134,7 @@ jobs:
             fi
             
             log "部署流程结束"
-EOF
+            EOF
             
             # 设置执行权限并运行部署脚本
             chmod +x /tmp/deploy-script.sh
