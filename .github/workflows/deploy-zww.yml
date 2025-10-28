@@ -91,12 +91,6 @@ jobs:
             
             log "代码更新完成"
             
-            # 检查pnpm是否安装
-            if ! command -v pnpm &> /dev/null; then
-                log "错误: pnpm 未安装"
-                exit 1
-            fi
-            
             # 安装依赖
             log "安装依赖..."
             pnpm install || {
