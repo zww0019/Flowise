@@ -1,10 +1,11 @@
-import { INode, INodeParams, INodeData, ICommonObject } from '../../../src/Interface'
-import { getBaseClasses } from '../../../src/utils'
 import { Tool } from '@langchain/core/tools'
-import fetch from 'node-fetch'
+import { Readability } from '@mozilla/readability'
 import * as cheerio from 'cheerio'
+import { JSDOM } from 'jsdom'
+import fetch from 'node-fetch'
 import { URL } from 'url'
-import { xmlScrape } from '../../../src/utils'
+import { ICommonObject, INode, INodeData, INodeParams } from '../../../src/Interface'
+import { getBaseClasses, xmlScrape } from '../../../src/utils'
 
 interface ScrapedPageData {
     url: string
@@ -106,6 +107,9 @@ class WebScraperRecursiveTool extends Tool {
             }
 
             const html = await response.text()
+            const doc = new JSDOM(html)
+            const readability = new Readability(doc.window.document)
+            const article = readability.parse()
             const $ = cheerio.load(html)
             const title = $('title').first().text() || 'No title found'
             let description =
@@ -120,7 +124,7 @@ class WebScraperRecursiveTool extends Tool {
                     paragraphs.push(paragraphText.trim())
                 }
             })
-            const body_text = paragraphs.join(' ').replace(/\s\s+/g, ' ').trim()
+            const body_text = article?.textContent || paragraphs.join(' ').replace(/\s\s+/g, ' ').trim()
             const foundLinks: string[] = []
 
             $('a').each((_i, elem) => {
