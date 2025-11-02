@@ -82,8 +82,8 @@ jobs:
             log "代码更新完成"
             
             # 确保pnpm在PATH中
-            export PATH="/root/.nvm/versions/node/v20.19.4/bin:$PATH"
-            which pnpm || echo "pnpm not found in PATH, expected at /root/.nvm/versions/node/v20.19.4/bin/pnpm"
+            export PATH="/root/.nvm/versions/node/v20.19.5/bin:$PATH"
+            which pnpm || echo "pnpm not found in PATH, expected at /root/.nvm/versions/node/v20.19.5/bin/pnpm"
 
             # 安装依赖
             log "安装依赖..."
