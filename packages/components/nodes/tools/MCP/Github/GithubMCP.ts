@@ -145,6 +145,12 @@ class Github_MCP implements INode {
                 perPage: Number(input.perPage) || 10
             }
         }
+        if (toolName === 'get_issue'){
+            return {
+                ...input,
+                issue_number: Number(input.issue_number)
+            }
+        }
         // 默认情况下，直接返回原始输入
         return input
     }
