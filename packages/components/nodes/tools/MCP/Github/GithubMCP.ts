@@ -1,4 +1,5 @@
-import { Tool } from '@langchain/core/tools'
+//@ts-ignore
+import { Tool, tool } from '@langchain/core/tools'
 import { ICommonObject, INode, INodeData, INodeOptionsValue, INodeParams } from '../../../../src/Interface'
 import { getCredentialData, getCredentialParam, getNodeModulesPackagePath } from '../../../../src/utils'
 import { MCPToolkit } from '../core'
@@ -81,7 +82,71 @@ class Github_MCP implements INode {
             }
         }
 
-        return tools.filter((tool: any) => mcpActions.includes(tool.name))
+        const filteredTools = tools.filter((tool: any) => mcpActions.includes(tool.name))
+        
+        // 包装工具以定制 input 参数
+        return filteredTools.map((tool: Tool) => {
+            return this.wrapToolWithInputCustomization(tool)
+        })
+    }
+
+    /**
+     * 包装工具以定制 input 参数
+     * 可以在这里对输入参数进行预处理、验证或转换
+     */
+    private wrapToolWithInputCustomization(originalTool: Tool): Tool {
+        return tool(
+            async (input: any): Promise<string> => {
+                // 在这里可以定制 input 参数
+                const customizedInput = this.customizeInput(originalTool.name, input)
+                
+                // 调用原始工具
+                return await originalTool.invoke(customizedInput)
+            },
+            {
+                name: originalTool.name,
+                description: originalTool.description,
+                schema: originalTool.schema
+            }
+        )
+    }
+
+    /**
+     * 定制输入参数的逻辑
+     * 可以根据工具名称和原始输入进行不同的处理
+     */
+    private customizeInput(toolName: string, input: any): any {
+        // 示例：为所有工具添加默认值或进行转换
+        // 你可以根据实际需求修改这个函数
+        
+        // 示例1: 添加默认参数
+        // if (toolName === 'some_tool_name') {
+        //     return {
+        //         ...input,
+        //         defaultParam: 'defaultValue'
+        //     }
+        // }
+        
+        // 示例2: 转换参数格式
+        // if (toolName === 'another_tool') {
+        //     return {
+        //         ...input,
+        //         param: input.param?.toLowerCase()
+        //     }
+        // }
+        
+        // 示例3: 验证参数
+        // if (toolName === 'github_search' && !input.query) {
+        //     throw new Error('Query parameter is required')
+        // }
+        if (toolName === 'search_repositories') {
+            return {
+                ...input,
+                perPage: Number(input.perPage) || 10
+            }
+        }
+        // 默认情况下，直接返回原始输入
+        return input
     }
 
     async getTools(nodeData: INodeData, options: ICommonObject): Promise<Tool[]> {
