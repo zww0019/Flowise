@@ -1,14 +1,14 @@
-import { INodeOptionsValue } from 'flowise-components'
-import { StatusCodes } from 'http-status-codes'
 import { cloneDeep, omit } from 'lodash'
+import { StatusCodes } from 'http-status-codes'
+import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
+import { INodeData, MODE } from '../../Interface'
+import { INodeOptionsValue } from 'flowise-components'
+import { databaseEntities } from '../../utils'
+import logger from '../../utils/logger'
 import { InternalFlowiseError } from '../../errors/internalFlowiseError'
 import { getErrorMessage } from '../../errors/utils'
-import { INodeData, MODE } from '../../Interface'
-import { databaseEntities } from '../../utils'
 import { OMIT_QUEUE_JOB_DATA } from '../../utils/constants'
 import { executeCustomNodeFunction } from '../../utils/executeCustomNodeFunction'
-import { getRunningExpressApp } from '../../utils/getRunningExpressApp'
-import logger from '../../utils/logger'
 
 // Get all component nodes
 const getAllNodes = async () => {
@@ -104,8 +104,7 @@ const getSingleNodeAsyncOptions = async (nodeName: string, requestBody: any): Pr
                     previousNodes: requestBody.previousNodes,
                     currentNode: requestBody.currentNode,
                     searchOptions: requestBody.searchOptions,
-                    cachePool: appServer.cachePool,
-                    workspaceId: requestBody.searchOptions?.workspaceId?._value || requestBody.workspaceId
+                    cachePool: appServer.cachePool
                 })
 
                 return dbResponse
