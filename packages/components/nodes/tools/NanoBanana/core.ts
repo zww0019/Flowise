@@ -56,6 +56,11 @@ export class NanoBananaTool extends StructuredTool {
         try {
             const { prompt, image, aspectRatio, customConfig } = arg
 
+            // Validate required input
+            if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+                throw new Error('Prompt is required and must be a non-empty string')
+            }
+
             // Determine model name based on version
             // According to Google Gemini API docs:
             // - gemini-2.5-flash-image (Nano Banana)
@@ -208,16 +213,18 @@ export class NanoBananaTool extends StructuredTool {
 
             // Extract image data from response
             // REST API returns inline_data (snake_case), SDK returns inlineData (camelCase)
+            // Only process the first candidate to avoid unnecessary processing
             if (result.candidates && result.candidates.length > 0) {
                 const candidate = result.candidates[0]
                 if (candidate.content && candidate.content.parts) {
+                    // Find the first image part and return immediately to avoid unnecessary iteration
                     for (const part of candidate.content.parts) {
                         // Support both REST API format (inline_data) and SDK format (inlineData)
                         const inlineData = part.inline_data || part.inlineData
-                        if (inlineData) {
+                        if (inlineData && inlineData.data) {
                             const mimeType = inlineData.mime_type || inlineData.mimeType || 'image/png'
                             const data = inlineData.data
-                            // Return base64 image data URL
+                            // Return immediately after finding the first image to avoid further processing
                             return `data:${mimeType};base64,${data}`
                         }
                     }
