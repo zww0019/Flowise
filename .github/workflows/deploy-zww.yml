@@ -12,11 +12,11 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-          
+
       - name: Deploy to remote server
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -82,7 +82,7 @@ jobs:
             log "代码更新完成"
             
             # 确保pnpm在PATH中
-            export PATH="/root/.nvm/versions/node/v20.19.5/bin:$PATH"
+            # export PATH="/root/.nvm/versions/node/v20.19.5/bin:$PATH"
             which pnpm || echo "pnpm not found in PATH, expected at /root/.nvm/versions/node/v20.19.5/bin/pnpm"
 
             # 安装依赖
