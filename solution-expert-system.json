@@ -1,0 +1,254 @@
+{
+  "name": "智能解决方案专家系统",
+  "description": "基于 Sequential Agents 的智能解决方案生成系统，包含需求分析、技术调研、方案设计、评审循环",
+  "nodes": [
+    {
+      "id": "start-node",
+      "type": "seqStart",
+      "position": [100, 300],
+      "data": {
+        "label": "Start",
+        "name": "seqStart",
+        "version": 2.0,
+        "model": {
+          "label": "ChatOpenAI",
+          "name": "chatOpenAI",
+          "modelName": "gpt-4o",
+          "temperature": 0.7
+        },
+        "agentMemory": {
+          "label": "Checkpointer Memory",
+          "name": "checkpointerMemory"
+        }
+      }
+    },
+    {
+      "id": "state-node",
+      "type": "seqState",
+      "position": [300, 300],
+      "data": {
+        "label": "State",
+        "name": "seqState",
+        "stateMemoryCode": "{\n  \"user_requirement\": {\n    \"value\": (x, y) => y ?? x,\n    \"default\": () => \"\"\n  },\n  \"requirement_analysis\": {\n    \"value\": (x, y) => y ?? x,\n    \"default\": () => \"\"\n  },\n  \"tech_research\": {\n    \"value\": (x, y) => y ?? x,\n    \"default\": () => \"\"\n  },\n  \"implementation_plan\": {\n    \"value\": (x, y) => y ?? x,\n    \"default\": () => \"\"\n  },\n  \"review_feedback\": {\n    \"value\": (x, y) => (Array.isArray(y) ? x.concat(y) : x.concat([y])),\n    \"default\": () => []\n  },\n  \"review_passed\": {\n    \"value\": (x, y) => y ?? x,\n    \"default\": () => false\n  },\n  \"iteration_count\": {\n    \"value\": (x, y) => y ?? x,\n    \"default\": () => 0\n  }\n}"
+      }
+    },
+    {
+      "id": "requirement-analyst",
+      "type": "seqAgent",
+      "position": [500, 100],
+      "data": {
+        "label": "需求分析师",
+        "name": "seqAgent",
+        "agentName": "requirement_analyst",
+        "systemMessagePrompt": "你是一位资深的需求分析师，具有以下核心能力：\n\n## 角色定位\n- 擅长探索和挖掘用户真实需求\n- 善于控制需求边界，预防需求蔓延和需求爆炸\n- 能够识别核心需求和衍生需求\n\n## 输出规范\n### 1. 核心需求清单\n- [P0] 必须实现的核心功能\n- [P1] 重要但可分期实现的功能\n- [P2] 锦上添花的增强功能\n\n### 2. 需求边界定义\n- 本次范围内：...\n- 明确排除：...\n\n### 3. 风险提示\n- 可能的需求蔓延点\n- 建议的边界控制措施\n\n### 4. 对技术调研师的建议\n\n请根据用户输入：{input}，进行需求分析。",
+        "updateStateMemoryCode": "return {\n  \"requirement_analysis\": $flow.output.content\n};"
+      }
+    },
+    {
+      "id": "tech-researcher",
+      "type": "seqAgent",
+      "position": [700, 200],
+      "data": {
+        "label": "技术调研师",
+        "name": "seqAgent",
+        "agentName": "tech_researcher",
+        "systemMessagePrompt": "你是一位技术调研专家，负责根据需求分析结果进行技术调研。\n\n## 调研原则\n1. 技术可控性：优先选择成熟稳定的技术栈\n2. 高效性：考虑开发效率、学习成本\n3. 性能优化：关注响应时间、可扩展性\n\n## 工具使用\n使用搜索工具查询最新技术资讯、GitHub仓库、技术博客\n\n## 输出规范\n### 1. 技术选型推荐\n| 层级 | 推荐技术 | 备选方案 | 选择理由 |\n\n### 2. 技术可行性评估\n### 3. 关键技术点\n### 4. 参考资源\n\n基于需求分析：\n{requirement_analysis}\n\n请进行技术调研。",
+        "tools": [
+          {
+            "label": "Google Custom Search",
+            "name": "googleCustomSearch",
+            "id": "google-search-tool"
+          }
+        ],
+        "promptValues": [
+          {
+            "key": "requirement_analysis",
+            "value": "$flow.state.requirement_analysis"
+          }
+        ],
+        "updateStateMemoryCode": "return {\n  \"tech_research\": $flow.output.content\n};"
+      }
+    },
+    {
+      "id": "google-search-tool",
+      "type": "googleCustomSearch",
+      "position": [700, 50],
+      "data": {
+        "label": "Google Custom Search",
+        "name": "googleCustomSearch",
+        "credential": "google-custom-search-credential"
+      }
+    },
+    {
+      "id": "solution-architect",
+      "type": "seqAgent",
+      "position": [900, 300],
+      "data": {
+        "label": "实现方案师",
+        "name": "seqAgent",
+        "agentName": "solution_architect",
+        "systemMessagePrompt": "你是一位资深的解决方案架构师。\n\n## 设计原则\n1. 需求对齐：确保方案覆盖所有核心需求\n2. 技术落地：基于技术调研结果选择最优技术栈\n3. 风险可控：识别风险点并提供应对策略\n\n## 输出规范\n### 1. 方案概述\n### 2. 系统架构设计\n### 3. 模块划分\n### 4. 实施计划\n### 5. 风险及应对\n\n基于以下信息：\n- 需求分析：{requirement_analysis}\n- 技术调研：{tech_research}\n{review_feedback_section}\n\n请设计实现方案。",
+        "promptValues": [
+          {
+            "key": "requirement_analysis",
+            "value": "$flow.state.requirement_analysis"
+          },
+          {
+            "key": "tech_research",
+            "value": "$flow.state.tech_research"
+          },
+          {
+            "key": "review_feedback_section",
+            "value": "$flow.state.review_feedback.length > 0 ? '\\n- 评审反馈：' + $flow.state.review_feedback[$flow.state.review_feedback.length - 1] : ''"
+          }
+        ],
+        "updateStateMemoryCode": "return {\n  \"implementation_plan\": $flow.output.content,\n  \"iteration_count\": ($flow.state.iteration_count || 0) + 1\n};"
+      }
+    },
+    {
+      "id": "review-committee",
+      "type": "seqAgent",
+      "position": [1100, 400],
+      "data": {
+        "label": "评审委员会",
+        "name": "seqAgent",
+        "agentName": "review_committee",
+        "systemMessagePrompt": "你是由需求分析师和技术调研师组成的评审委员会。\n\n## 评审视角\n### 需求分析师视角\n- 方案是否覆盖所有核心需求？\n- 是否存在需求遗漏或超出范围？\n\n### 技术调研师视角\n- 技术选型是否合理？\n- 架构设计是否可行？\n\n## 评审标准\n- 【通过】：方案完整、可行、风险可控\n- 【需修改】：存在明确问题需要修正\n\n## 输出规范\n### 1. 评审结论: [PASS/REVISE]\n### 2. 需求覆盖度评审\n### 3. 技术可行性评审\n### 4. 修改建议\n\n**重要**：最后一行输出 \"REVIEW_RESULT: PASS\" 或 \"REVIEW_RESULT: REVISE\"\n\n基于以下内容进行评审：\n- 需求分析：{requirement_analysis}\n- 技术调研：{tech_research}\n- 实现方案：{implementation_plan}\n\n请进行评审。",
+        "promptValues": [
+          {
+            "key": "requirement_analysis",
+            "value": "$flow.state.requirement_analysis"
+          },
+          {
+            "key": "tech_research",
+            "value": "$flow.state.tech_research"
+          },
+          {
+            "key": "implementation_plan",
+            "value": "$flow.state.implementation_plan"
+          }
+        ],
+        "updateStateMemoryCode": "const output = $flow.output.content;\nconst reviewPassed = output.includes('REVIEW_RESULT: PASS');\nreturn {\n  \"review_feedback\": $flow.state.review_feedback.concat([output]),\n  \"review_passed\": reviewPassed\n};"
+      }
+    },
+    {
+      "id": "review-condition",
+      "type": "seqCondition",
+      "position": [1300, 400],
+      "data": {
+        "label": "评审判断",
+        "name": "seqCondition",
+        "conditionName": "review_check",
+        "conditionFunction": "const state = $flow.state;\nconst messages = state.messages;\nconst lastMessage = messages[messages.length - 1];\nconst iterationCount = parseInt(state.iteration_count) || 0;\n\n// 超过3次迭代强制通过\nif (iterationCount >= 3) {\n    return \"final_adjustor\";\n}\n\n// 评审通过\nif (lastMessage.content.includes(\"REVIEW_RESULT: PASS\")) {\n    return \"final_adjustor\";\n}\n\n// 需要修改\nreturn \"solution_architect\";"
+      }
+    },
+    {
+      "id": "final-adjustor",
+      "type": "seqAgent",
+      "position": [1500, 500],
+      "data": {
+        "label": "最终调整",
+        "name": "seqAgent",
+        "agentName": "final_adjustor",
+        "systemMessagePrompt": "你是方案最终调整专家，输出最终可交付的实现方案文档。\n\n## 输出格式\n# [项目名称] 实现方案 v1.0\n\n## 一、项目概述\n[项目背景、目标、范围]\n\n## 二、需求概要\n### 2.1 核心需求\n### 2.2 需求边界\n### 2.3 优先级划分\n\n## 三、技术方案\n### 3.1 技术选型\n### 3.2 系统架构\n### 3.3 模块设计\n### 3.4 关键技术点\n\n## 四、实施计划\n### 4.1 开发阶段\n### 4.2 里程碑\n### 4.3 资源需求\n\n## 五、风险管理\n### 5.1 技术风险\n### 5.2 进度风险\n### 5.3 应对措施\n\n基于以下完整信息，输出最终方案：\n- 需求分析：{requirement_analysis}\n- 技术调研：{tech_research}\n- 实现方案：{implementation_plan}\n- 评审反馈：{review_feedback}",
+        "promptValues": [
+          {
+            "key": "requirement_analysis",
+            "value": "$flow.state.requirement_analysis"
+          },
+          {
+            "key": "tech_research",
+            "value": "$flow.state.tech_research"
+          },
+          {
+            "key": "implementation_plan",
+            "value": "$flow.state.implementation_plan"
+          },
+          {
+            "key": "review_feedback",
+            "value": "JSON.stringify($flow.state.review_feedback)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "end-node",
+      "type": "seqEnd",
+      "position": [1700, 500],
+      "data": {
+        "label": "End",
+        "name": "seqEnd"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-start-state",
+      "source": "start-node",
+      "target": "state-node",
+      "sourceHandle": "output",
+      "targetHandle": "input"
+    },
+    {
+      "id": "edge-state-requirement",
+      "source": "state-node",
+      "target": "requirement-analyst",
+      "sourceHandle": "output",
+      "targetHandle": "sequentialNode"
+    },
+    {
+      "id": "edge-requirement-tech",
+      "source": "requirement-analyst",
+      "target": "tech-researcher",
+      "sourceHandle": "output",
+      "targetHandle": "sequentialNode"
+    },
+    {
+      "id": "edge-tech-solution",
+      "source": "tech-researcher",
+      "target": "solution-architect",
+      "sourceHandle": "output",
+      "targetHandle": "sequentialNode"
+    },
+    {
+      "id": "edge-solution-review",
+      "source": "solution-architect",
+      "target": "review-committee",
+      "sourceHandle": "output",
+      "targetHandle": "sequentialNode"
+    },
+    {
+      "id": "edge-review-condition",
+      "source": "review-committee",
+      "target": "review-condition",
+      "sourceHandle": "output",
+      "targetHandle": "sequentialNode"
+    },
+    {
+      "id": "edge-condition-final",
+      "source": "review-condition",
+      "target": "final-adjustor",
+      "sourceHandle": "final_adjustor",
+      "targetHandle": "sequentialNode"
+    },
+    {
+      "id": "edge-condition-loop",
+      "source": "review-condition",
+      "target": "solution-architect",
+      "sourceHandle": "solution_architect",
+      "targetHandle": "loop"
+    },
+    {
+      "id": "edge-final-end",
+      "source": "final-adjustor",
+      "target": "end-node",
+      "sourceHandle": "output",
+      "targetHandle": "sequentialNode"
+    }
+  ],
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 0.8
+  }
+}

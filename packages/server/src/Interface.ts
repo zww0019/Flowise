@@ -1,6 +1,7 @@
 import {
     IAction,
     ICommonObject,
+    IDynamicForm,
     IFileUpload,
     IHumanInput,
     INode,
@@ -301,6 +302,7 @@ export interface IncomingAgentflowInput extends Omit<IncomingInput, 'question'> 
     question?: string
     form?: Record<string, any>
     humanInput?: IHumanInput
+    dynamicForm?: IDynamicForm
 }
 
 export interface IActiveChatflows {

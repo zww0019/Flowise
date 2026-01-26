@@ -303,4 +303,15 @@ export class SSEStreamer implements IServerSideEventStreamer {
             delete this.clients[chatId]
         }
     }
+
+    streamFormSchemaEvent(chatId: string, data: any): void {
+        const client = this.clients[chatId]
+        if (client) {
+            const clientResponse = {
+                event: 'formSchema',
+                data: data
+            }
+            client.response.write('message:\ndata:' + JSON.stringify(clientResponse) + '\n\n')
+        }
+    }
 }

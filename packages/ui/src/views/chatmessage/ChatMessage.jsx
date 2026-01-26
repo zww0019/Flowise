@@ -56,6 +56,7 @@ import ChatFeedbackContentDialog from '@/ui-component/dialog/ChatFeedbackContent
 import StarterPromptsCard from '@/ui-component/cards/StarterPromptsCard'
 import AgentReasoningCard from './AgentReasoningCard'
 import AgentExecutedDataCard from './AgentExecutedDataCard'
+import DynamicFormCard from './DynamicFormCard'
 import { ImageButton, ImageSrc, ImageBackdrop, ImageMarked } from '@/ui-component/button/ImageButton'
 import CopyToClipboardButton from '@/ui-component/button/CopyToClipboardButton'
 import ThumbsUpButton from '@/ui-component/button/ThumbsUpButton'
@@ -649,6 +650,20 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
         })
     }
 
+    const updateLastMessageFormSchema = (data) => {
+        setMessages((prevMessages) => {
+            let allMessages = [...cloneDeep(prevMessages)]
+            if (allMessages[allMessages.length - 1].type === 'userMessage') return allMessages
+            allMessages[allMessages.length - 1].formSchema = data.formSchema
+            allMessages[allMessages.length - 1].nodeId = data.nodeId
+            // 更新消息内容为表单提示
+            if (data.content) {
+                allMessages[allMessages.length - 1].message = data.content
+            }
+            return allMessages
+        })
+    }
+
     const updateLastMessageArtifacts = (artifacts) => {
         artifacts.forEach((artifact) => {
             if (artifact.type === 'png' || artifact.type === 'jpeg') {
@@ -841,6 +856,52 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
             }
         } else {
             handleSubmit(undefined, elem.label, action)
+        }
+    }
+
+    const handleDynamicFormSubmit = async (message, type, formData, feedback) => {
+        // 移除消息中的formSchema，防止重复提交
+        const messageId = message.id
+        setMessages((prevMessages) => {
+            let allMessages = [...cloneDeep(prevMessages)]
+            // 使用id或索引来查找消息
+            const messageIndex = messageId
+                ? allMessages.findIndex((msg) => msg.id === messageId)
+                : allMessages.findIndex((msg) => msg.formSchema)
+            if (messageIndex !== -1) {
+                allMessages[messageIndex].formSchema = null
+            }
+            return allMessages
+        })
+
+        // 构建dynamicForm数据
+        const dynamicForm = {
+            type,
+            formData: type === 'proceed' ? formData : {},
+            feedback,
+            startNodeId: message.nodeId
+        }
+
+        // 提交到后端
+        try {
+            setLoading(true)
+            const params = {
+                question: feedback || (type === 'proceed' ? '已提交表单' : '已拒绝表单'),
+                chatId,
+                overrideConfig: {
+                    sessionId: chatId
+                },
+                dynamicForm
+            }
+
+            if (isAgentCanvas) {
+                await fetchResponseFromEventStream(chatflowid, params)
+            } else {
+                await handleSubmit(null, params.question, null, params)
+            }
+        } catch (error) {
+            console.error('Dynamic form submission error:', error)
+            handleError(error.message || '表单提交失败')
         }
     }
 
@@ -1106,6 +1167,9 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
                     case 'action':
                         updateLastMessageAction(payload.data)
                         break
+                    case 'formSchema':
+                        updateLastMessageFormSchema(payload.data)
+                        break
                     case 'nextAgent':
                         updateLastMessageNextAgent(payload.data)
                         break
@@ -1259,6 +1323,7 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
                 if (message.fileAnnotations) obj.fileAnnotations = message.fileAnnotations
                 if (message.agentReasoning) obj.agentReasoning = message.agentReasoning
                 if (message.action) obj.action = message.action
+                if (message.formSchema) obj.formSchema = message.formSchema
                 if (message.artifacts) {
                     obj.artifacts = message.artifacts
                     obj.artifacts.forEach((artifact) => {
@@ -2285,34 +2350,24 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
                     alignItems: 'center',
                     justifyContent: 'center',
                     p: 2,
-                    backgroundColor: theme.palette.background.paper
+                    backgroundColor: theme.palette.background.paper,
+                    overflowY: 'auto' // 在外层容器启用滚动
                 }}
             >
                 <Box
                     sx={{
                         width: '100%',
-                        height: '100%',
-                        position: 'relative'
+                        maxWidth: '600px',
+                        maxHeight: '100%',
+                        p: 3,
+                        my: 'auto', // 垂直居中
+                        backgroundColor: customization.isDarkMode
+                            ? darken(theme.palette.background.paper, 0.2)
+                            : theme.palette.background.paper,
+                        boxShadow: customization.isDarkMode ? '0px 0px 15px 0px rgba(255, 255, 255, 0.1)' : theme.shadows[3],
+                        borderRadius: 2
                     }}
                 >
-                    <Box
-                        sx={{
-                            position: 'absolute',
-                            top: '50%',
-                            left: '50%',
-                            transform: 'translate(-50%, -50%)',
-                            width: '100%',
-                            maxWidth: '600px',
-                            maxHeight: '90%', // Limit height to 90% of parent
-                            p: 3,
-                            backgroundColor: customization.isDarkMode
-                                ? darken(theme.palette.background.paper, 0.2)
-                                : theme.palette.background.paper,
-                            boxShadow: customization.isDarkMode ? '0px 0px 15px 0px rgba(255, 255, 255, 0.1)' : theme.shadows[3],
-                            borderRadius: 2,
-                            overflowY: 'auto' // Enable vertical scrolling if content overflows
-                        }}
-                    >
                         <Typography variant='h4' sx={{ mb: 1, textAlign: 'center' }}>
                             {formTitle || 'Please Fill Out The Form'}
                         </Typography>
@@ -2357,7 +2412,6 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
                             {loading ? 'Submitting...' : 'Submit'}
                         </Button>
                     </Box>
-                </Box>
             </Box>
         )
     }
@@ -2764,6 +2818,25 @@ const ChatMessage = ({ open, chatflowid, isAgentCanvas, isDialog, previews, setP
                                                         </>
                                                     )
                                                 })}
+                                            </div>
+                                        )}
+                                        {message.formSchema && (
+                                            <div
+                                                style={{
+                                                    display: 'block',
+                                                    width: '100%',
+                                                    marginTop: '8px'
+                                                }}
+                                            >
+                                                <DynamicFormCard
+                                                    formSchema={message.formSchema}
+                                                    onSubmit={(type, formData, feedback) => {
+                                                        // 处理表单提交
+                                                        handleDynamicFormSubmit(message, type, formData, feedback)
+                                                    }}
+                                                    customization={customization}
+                                                    disabled={loading}
+                                                />
                                             </div>
                                         )}
                                         {message.type === 'apiMessage' && message.id ? (

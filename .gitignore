@@ -33,7 +33,6 @@
 .env.development.local
 .env.test.local
 .env.production.local
-.env
 
 ## turbo
 .turbo
@@ -81,7 +80,7 @@
 *.csr
 
 ## Certificate
-*.der 
+*.der
 
 ## Key database file
 *.kdb

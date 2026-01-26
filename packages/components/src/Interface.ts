@@ -445,6 +445,7 @@ export interface IServerSideEventStreamer {
     streamTTSStartEvent(chatId: string, chatMessageId: string, format: string): void
     streamTTSDataEvent(chatId: string, chatMessageId: string, audioChunk: string): void
     streamTTSEndEvent(chatId: string, chatMessageId: string): void
+    streamFormSchemaEvent(chatId: string, data: any): void
 }
 
 export enum FollowUpPromptProvider {
@@ -484,4 +485,36 @@ export interface IHumanInput {
     type: 'proceed' | 'reject'
     startNodeId: string
     feedback?: string
+}
+
+// Dynamic Form types
+export type FormFieldType = 'text' | 'email' | 'number' | 'textarea' | 'select' | 'checkbox' | 'radio'
+
+export interface IFormField {
+    name: string // Field name (variable name, use snake_case)
+    label: string // Field display label
+    type: FormFieldType // Field type
+    placeholder?: string // Placeholder text
+    defaultValue?: string // Default value
+    required?: boolean // Whether field is required
+    options?: Array<{ label: string; value: string }> // Options (for select/radio)
+    description?: string // Field description/help text
+    validation?: { // Validation rules
+        pattern?: string // Regex pattern
+        min?: number // Minimum value/length
+        max?: number // Maximum value/length
+    }
+}
+
+export interface IFormSchema {
+    title: string // Form title
+    description?: string // Form description
+    fields: IFormField[] // Field list
+}
+
+export interface IDynamicForm {
+    type: 'proceed' | 'reject'
+    startNodeId: string
+    formData?: Record<string, any> // User submitted form data
+    feedback?: string // User feedback (optional)
 }

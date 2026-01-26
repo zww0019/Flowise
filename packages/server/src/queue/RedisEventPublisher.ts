@@ -444,6 +444,21 @@ export class RedisEventPublisher implements IServerSideEventStreamer {
         }
     }
 
+    streamFormSchemaEvent(chatId: string, data: any): void {
+        try {
+            this.redisPublisher.publish(
+                chatId,
+                JSON.stringify({
+                    chatId,
+                    eventType: 'formSchema',
+                    data: data
+                })
+            )
+        } catch (error) {
+            console.error('Error streaming formSchema event:', error)
+        }
+    }
+
     async disconnect() {
         if (this.redisPublisher) {
             await this.redisPublisher.quit()

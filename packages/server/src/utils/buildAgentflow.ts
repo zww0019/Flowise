@@ -6,6 +6,7 @@ import {
     AnalyticHandler,
     ICommonObject,
     ICondition,
+    IDynamicForm,
     IFileUpload,
     IHumanInput,
     IMessage,
@@ -79,6 +80,7 @@ interface IProcessNodeOutputsParams {
     nodeName: string
     result: any
     humanInput?: IHumanInput
+    dynamicForm?: IDynamicForm
     graph: Record<string, string[]>
     nodes: IReactFlowNode[]
     edges: IReactFlowEdge[]
@@ -126,6 +128,7 @@ interface IExecuteNodeParams {
     uploadedFilesContent?: string
     fileUploads?: IFileUpload[]
     humanInput?: IHumanInput
+    dynamicForm?: IDynamicForm
     agentFlowExecutedData?: IAgentflowExecutedData[]
     agentflowRuntime: IAgentFlowRuntime
     abortController?: AbortController
@@ -764,7 +767,8 @@ async function determineNodesToIgnore(
     const isDecisionNode =
         currentNode.data.name === 'conditionAgentflow' ||
         currentNode.data.name === 'conditionAgentAgentflow' ||
-        currentNode.data.name === 'humanInputAgentflow'
+        currentNode.data.name === 'humanInputAgentflow' ||
+        currentNode.data.name === 'dynamicFormAgentflow'
 
     if (isDecisionNode && result.output?.conditions) {
         const outputConditions: ICondition[] = result.output.conditions
@@ -797,6 +801,7 @@ async function processNodeOutputs({
     nodeName,
     result,
     humanInput,
+    dynamicForm,
     graph,
     nodes,
     edges,
@@ -805,16 +810,17 @@ async function processNodeOutputs({
     loopCounts,
     sseStreamer,
     chatId
-}: IProcessNodeOutputsParams): Promise<{ humanInput?: IHumanInput }> {
+}: IProcessNodeOutputsParams): Promise<{ humanInput?: IHumanInput; dynamicForm?: IDynamicForm }> {
     logger.debug(`\n🔄 Processing outputs from node: ${nodeId}`)
 
     let updatedHumanInput = humanInput
+    let updatedDynamicForm = dynamicForm
 
     const childNodeIds = graph[nodeId] || []
     logger.debug(`  👉 Child nodes: [${childNodeIds.join(', ')}]`)
 
     const currentNode = nodes.find((n) => n.id === nodeId)
-    if (!currentNode) return { humanInput: updatedHumanInput }
+    if (!currentNode) return { humanInput: updatedHumanInput, dynamicForm: updatedDynamicForm }
 
     // Get nodes to ignore based on conditions
     const ignoreNodeIds = await determineNodesToIgnore(currentNode, result, edges, nodeId)
@@ -883,6 +889,12 @@ async function processNodeOutputs({
                 logger.debug(`    🧹 Clearing humanInput for loop iteration`)
                 updatedHumanInput = undefined
             }
+
+            // Clear dynamicForm when looping to prevent it from being reused
+            if (updatedDynamicForm) {
+                logger.debug(`    🧹 Clearing dynamicForm for loop iteration`)
+                updatedDynamicForm = undefined
+            }
         } else {
             logger.debug(`    ⚠️ Maximum loop count (${maxLoop}) reached, stopping loop`)
             const fallbackMessage = result.output.fallbackMessage || `Loop completed after reaching maximum iteration count of ${maxLoop}.`
@@ -893,7 +905,7 @@ async function processNodeOutputs({
         }
     }
 
-    return { humanInput: updatedHumanInput }
+    return { humanInput: updatedHumanInput, dynamicForm: updatedDynamicForm }
 }
 
 /**
@@ -1026,6 +1038,7 @@ const executeNode = async ({
     uploadedFilesContent = '',
     fileUploads,
     humanInput,
+    dynamicForm,
     agentFlowExecutedData = [],
     agentflowRuntime,
     abortController,
@@ -1044,6 +1057,7 @@ const executeNode = async ({
     shouldStop?: boolean
     agentFlowExecutedData?: IAgentflowExecutedData[]
     humanInput?: IHumanInput
+    dynamicForm?: IDynamicForm
 }> => {
     try {
         if (abortController?.signal?.aborted) {
@@ -1120,6 +1134,7 @@ const executeNode = async ({
         // Handle human input if present
         let humanInputAction: Record<string, any> | undefined
         let updatedHumanInput = humanInput
+        let updatedDynamicForm = dynamicForm
 
         if (agentFlowExecutedData.length) {
             const lastNodeOutput = agentFlowExecutedData[agentFlowExecutedData.length - 1]?.data?.output as ICommonObject | undefined
@@ -1137,10 +1152,24 @@ const executeNode = async ({
             updatedHumanInput = undefined
         }
 
+        // This is when dynamicForm is resumed
+        if (dynamicForm && nodeId === dynamicForm.startNodeId) {
+            reactFlowNodeData.inputs = { ...reactFlowNodeData.inputs, dynamicForm }
+            // Remove the stopped dynamicForm from execution data
+            agentFlowExecutedData = agentFlowExecutedData.filter((execData) => execData.nodeId !== nodeId)
+
+            // Clear dynamicForm after it's been consumed to prevent subsequent dynamicFormAgentflow nodes from proceeding
+            logger.debug(`🧹 Clearing dynamicForm after consumption by node: ${nodeId}`)
+            updatedDynamicForm = undefined
+        }
+
         // Check if this is the last node for streaming purpose
         const isLastNode =
             !isRecursive &&
-            (!graph[nodeId] || graph[nodeId].length === 0 || (!humanInput && reactFlowNode.data.name === 'humanInputAgentflow'))
+            (!graph[nodeId] ||
+                graph[nodeId].length === 0 ||
+                (!humanInput && reactFlowNode.data.name === 'humanInputAgentflow') ||
+                (!dynamicForm && reactFlowNode.data.name === 'dynamicFormAgentflow'))
 
         if (incomingInput.question && incomingInput.form) {
             throw new Error('Question and form cannot be provided at the same time')
@@ -1382,7 +1411,7 @@ const executeNode = async ({
 
             sseStreamer?.streamActionEvent(chatId, humanInputAction)
 
-            return { result: results, shouldStop: true, agentFlowExecutedData, humanInput: updatedHumanInput }
+            return { result: results, shouldStop: true, agentFlowExecutedData, humanInput: updatedHumanInput, dynamicForm: updatedDynamicForm }
         }
 
         // Stop going through the current route if the node is a agent node waiting for human input before using the tool
@@ -1429,10 +1458,32 @@ const executeNode = async ({
 
             sseStreamer?.streamActionEvent(chatId, humanInputAction)
 
-            return { result: results, shouldStop: true, agentFlowExecutedData, humanInput: updatedHumanInput }
+            return { result: results, shouldStop: true, agentFlowExecutedData, humanInput: updatedHumanInput, dynamicForm: updatedDynamicForm }
         }
 
-        return { result: results, agentFlowExecutedData, humanInput: updatedHumanInput }
+        // Stop going through the current route if the node is a dynamicForm waiting for user input
+        if (!dynamicForm && reactFlowNode.data.name === 'dynamicFormAgentflow' && results?.output?.formSchema) {
+            const newWorkflowExecutedData: IAgentflowExecutedData = {
+                nodeId,
+                nodeLabel: reactFlowNode.data.label,
+                data: results,
+                previousNodeIds: reversedGraph[nodeId] || [],
+                status: 'STOPPED'
+            }
+            agentFlowExecutedData.push(newWorkflowExecutedData)
+
+            sseStreamer?.streamNextAgentFlowEvent(chatId, {
+                nodeId,
+                nodeLabel: reactFlowNode.data.label,
+                status: 'STOPPED'
+            })
+            sseStreamer?.streamAgentFlowExecutedDataEvent(chatId, agentFlowExecutedData)
+            sseStreamer?.streamAgentFlowEvent(chatId, 'STOPPED')
+
+            return { result: results, shouldStop: true, agentFlowExecutedData, humanInput: updatedHumanInput, dynamicForm: updatedDynamicForm }
+        }
+
+        return { result: results, agentFlowExecutedData, humanInput: updatedHumanInput, dynamicForm: updatedDynamicForm }
     } catch (error) {
         logger.error(`[server]: Error executing node ${nodeId}: ${getErrorMessage(error)}`)
         throw error
@@ -1506,6 +1557,7 @@ export const executeAgentFlow = async ({
     const chatflowid = chatflow.id
     const sessionId = iterationContext?.sessionId || overrideConfig.sessionId || chatId
     const humanInput: IHumanInput | undefined = incomingInput.humanInput
+    const dynamicForm: IDynamicForm | undefined = incomingInput.dynamicForm
 
     // Validate history schema if provided
     if (incomingInput.history && incomingInput.history.length > 0) {
@@ -1756,6 +1808,107 @@ export const executeAgentFlow = async ({
 
         // Update humanInput with the resolved startNodeId
         humanInput.startNodeId = startNodeId
+    } else if (dynamicForm && !(isRecursive && iterationContext)) {
+        // If it is dynamicForm, find the last checkpoint and resume
+        // Skip dynamicForm resumption for recursive iteration calls - they should start fresh
+        if (!previousExecution) {
+            throw new Error(`No previous execution found for session ${sessionId}`)
+        }
+
+        let executionData = JSON.parse(previousExecution.executionData) as IAgentflowExecutedData[]
+        let shouldUpdateExecution = false
+
+        // Handle different execution states
+        if (previousExecution.state === 'STOPPED') {
+            // Normal case - execution is stopped and ready to resume
+            logger.debug(`  ✅ Previous execution is in STOPPED state, ready to resume for dynamicForm`)
+        } else if (previousExecution.state === 'ERROR') {
+            // Check if second-to-last execution item is STOPPED and last is ERROR
+            if (executionData.length >= 2) {
+                const lastItem = executionData[executionData.length - 1]
+                const secondLastItem = executionData[executionData.length - 2]
+
+                if (lastItem.status === 'ERROR' && secondLastItem.status === 'STOPPED') {
+                    logger.debug(`  🔄 Found ERROR after STOPPED - removing last error item to allow retry`)
+                    logger.debug(`    Removing: ${lastItem.nodeId} (${lastItem.nodeLabel}) - ${lastItem.data?.error || 'Unknown error'}`)
+
+                    // Remove the last ERROR item
+                    executionData = executionData.slice(0, -1)
+                    shouldUpdateExecution = true
+                } else {
+                    throw new Error(
+                        `Cannot resume execution ${previousExecution.id} because it is in 'ERROR' state ` +
+                            `and the previous item is not in 'STOPPED' state. Only executions that ended with a ` +
+                            `STOPPED state (or ERROR after STOPPED) can be resumed.`
+                    )
+                }
+            } else {
+                throw new Error(
+                    `Cannot resume execution ${previousExecution.id} because it is in 'ERROR' state ` +
+                        `with insufficient execution data. Only executions in 'STOPPED' state can be resumed.`
+                )
+            }
+        } else {
+            throw new Error(
+                `Cannot resume execution ${previousExecution.id} because it is in '${previousExecution.state}' state. ` +
+                    `Only executions in 'STOPPED' state (or 'ERROR' after 'STOPPED') can be resumed.`
+            )
+        }
+
+        let startNodeId = dynamicForm.startNodeId
+
+        // If startNodeId is not provided, find the last node with STOPPED status from execution data
+        if (!startNodeId) {
+            // Search in reverse order to find the last (most recent) STOPPED node
+            const stoppedNode = [...executionData].reverse().find((data) => data.status === 'STOPPED')
+
+            if (!stoppedNode) {
+                throw new Error('No stopped node found in previous execution data to resume from')
+            }
+
+            startNodeId = stoppedNode.nodeId
+            logger.debug(`  🔍 Auto-detected stopped node to resume from: ${startNodeId} (${stoppedNode.nodeLabel})`)
+        }
+
+        // Verify that the node exists in previous execution
+        const nodeExists = executionData.some((data) => data.nodeId === startNodeId)
+
+        if (!nodeExists) {
+            throw new Error(
+                `Node ${startNodeId} not found in previous execution. ` +
+                    `This could indicate an invalid resume attempt or a modified flow.`
+            )
+        }
+
+        startingNodeIds.push(startNodeId)
+        checkForMultipleStartNodes(startingNodeIds, isRecursive, nodes)
+
+        agentFlowExecutedData.push(...executionData)
+
+        // Update execution data if we removed an error item
+        if (shouldUpdateExecution) {
+            logger.debug(`  📝 Updating execution data after removing error item`)
+            await updateExecution(appDataSource, previousExecution.id, workspaceId, {
+                executionData: JSON.stringify(executionData),
+                state: 'INPROGRESS'
+            })
+        }
+
+        // Get last state
+        const lastState = executionData[executionData.length - 1].data.state
+
+        // Update agentflow runtime state
+        agentflowRuntime.state = (lastState as ICommonObject) ?? {}
+
+        // Update execution state to INPROGRESS
+        await updateExecution(appDataSource, previousExecution.id, workspaceId, {
+            state: 'INPROGRESS'
+        })
+        newExecution = previousExecution
+        parentExecutionId = previousExecution.id
+
+        // Update dynamicForm with the resolved startNodeId
+        dynamicForm.startNodeId = startNodeId
     } else if (isRecursive && parentExecutionId) {
         const { startingNodeIds: startingNodeIdsFromFlow } = getStartingNode(nodeDependencies)
         startingNodeIds.push(...startingNodeIdsFromFlow)
@@ -1862,10 +2015,16 @@ export const executeAgentFlow = async ({
 
     let iterations = 0
     let currentHumanInput = humanInput
+    let currentDynamicForm = dynamicForm
 
     // For iteration calls, clear human input since they should start fresh
     if (isRecursive && iterationContext && humanInput) {
         currentHumanInput = undefined
+    }
+
+    // For iteration calls, clear dynamicForm since they should start fresh
+    if (isRecursive && iterationContext && dynamicForm) {
+        currentDynamicForm = undefined
     }
 
     let analyticHandlers: AnalyticHandler | undefined
@@ -1958,6 +2117,7 @@ export const executeAgentFlow = async ({
                 uploadedFilesContent,
                 fileUploads,
                 humanInput: currentHumanInput,
+                dynamicForm: currentDynamicForm,
                 agentFlowExecutedData,
                 agentflowRuntime,
                 abortController,
@@ -1979,6 +2139,11 @@ export const executeAgentFlow = async ({
             // Update humanInput if it was cleared by the executed node
             if (executionResult.humanInput !== currentHumanInput) {
                 currentHumanInput = executionResult.humanInput
+            }
+
+            // Update dynamicForm if it was cleared by the executed node
+            if (executionResult.dynamicForm !== currentDynamicForm) {
+                currentDynamicForm = executionResult.dynamicForm
             }
 
             if (executionResult.shouldStop) {
@@ -2005,6 +2170,15 @@ export const executeAgentFlow = async ({
 
             if (!isRecursive) sseStreamer?.streamAgentFlowExecutedDataEvent(chatId, agentFlowExecutedData)
 
+            // Check if node output contains formSchema (for DynamicForm node)
+            if (nodeResult && nodeResult.output && nodeResult.output.formSchema) {
+                sseStreamer?.streamFormSchemaEvent(chatId, {
+                    formSchema: nodeResult.output.formSchema,
+                    content: nodeResult.output.content || `请填写表单: ${nodeResult.output.formSchema.title}`,
+                    nodeId: currentNode.nodeId
+                })
+            }
+
             // Add to agentflow runtime state
             if (nodeResult && nodeResult.state) {
                 agentflowRuntime.state = nodeResult.state
@@ -2028,6 +2202,7 @@ export const executeAgentFlow = async ({
                 nodeName: reactFlowNode.data.name,
                 result: nodeResult,
                 humanInput: currentHumanInput,
+                dynamicForm: currentDynamicForm,
                 graph,
                 nodes,
                 edges,
@@ -2041,6 +2216,11 @@ export const executeAgentFlow = async ({
             // Update humanInput if it was changed
             if (processResult.humanInput !== currentHumanInput) {
                 currentHumanInput = processResult.humanInput
+            }
+
+            // Update dynamicForm if it was changed
+            if (processResult.dynamicForm !== currentDynamicForm) {
+                currentDynamicForm = processResult.dynamicForm
             }
         } catch (error) {
             const isAborted = getErrorMessage(error).includes('Aborted')
