@@ -517,4 +517,5 @@ export interface IDynamicForm {
     startNodeId: string
     formData?: Record<string, any> // User submitted form data
     feedback?: string // User feedback (optional)
+    formDataText?: string // Formatted text representation of form data
 }

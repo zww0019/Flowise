@@ -38,10 +38,10 @@ const createAgentFlowOutputs = (nodeData, newNodeId) => {
     if (nodeData.hideOutput) return []
 
     if (nodeData.outputs?.length) {
-        return nodeData.outputs.map((_, index) => ({
+        return nodeData.outputs.map((output, index) => ({
             id: `${newNodeId}-output-${index}`,
-            label: nodeData.label,
-            name: nodeData.name
+            label: output.label ?? nodeData.label,
+            name: output.name ?? nodeData.name
         }))
     }
 

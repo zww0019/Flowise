@@ -1154,7 +1154,22 @@ const executeNode = async ({
 
         // This is when dynamicForm is resumed
         if (dynamicForm && nodeId === dynamicForm.startNodeId) {
-            reactFlowNodeData.inputs = { ...reactFlowNodeData.inputs, dynamicForm }
+            // 🆕 从执行数据中提取 formSchema（必须在 filter 之前）
+            const previousExecution = agentFlowExecutedData.find((execData) => execData.nodeId === nodeId)
+            const formSchema = (previousExecution?.data?.output as ICommonObject)?.formSchema
+
+            if (!formSchema) {
+                logger.error(`❌ Cannot find formSchema for node ${nodeId} in execution data`)
+                throw new Error('Form schema not found in previous execution')
+            }
+
+            // 🆕 注入 dynamicForm 和 formSchema 到 inputs
+            reactFlowNodeData.inputs = {
+                ...reactFlowNodeData.inputs,
+                dynamicForm,
+                formSchema  // 注入 formSchema 以便验证使用
+            }
+
             // Remove the stopped dynamicForm from execution data
             agentFlowExecutedData = agentFlowExecutedData.filter((execData) => execData.nodeId !== nodeId)
 
@@ -1479,6 +1494,13 @@ const executeNode = async ({
             })
             sseStreamer?.streamAgentFlowExecutedDataEvent(chatId, agentFlowExecutedData)
             sseStreamer?.streamAgentFlowEvent(chatId, 'STOPPED')
+
+            // ⚠️ 关键修复：发送 formSchema 事件（必须在返回之前）
+            sseStreamer?.streamFormSchemaEvent(chatId, {
+                formSchema: results.output.formSchema,
+                content: results.output.content || `请填写表单: ${results.output.formSchema.title}`,
+                nodeId: nodeId
+            })
 
             return { result: results, shouldStop: true, agentFlowExecutedData, humanInput: updatedHumanInput, dynamicForm: updatedDynamicForm }
         }

@@ -9,9 +9,9 @@ import {
     INode,
     INodeData,
     INodeOptionsValue,
+    INodeOutputsValue,
     INodeParams
 } from '../../../src/Interface'
-import { BaseMessageLike } from '@langchain/core/messages'
 import { DEFAULT_DYNAMIC_FORM_COLLECTION_PROMPT } from '../prompt'
 
 class DynamicForm_Agentflow implements INode {
@@ -25,6 +25,7 @@ class DynamicForm_Agentflow implements INode {
     color: string
     baseClasses: string[]
     inputs: INodeParams[]
+    outputs: INodeOutputsValue[]
 
     constructor() {
         this.label = 'Dynamic Form'
@@ -32,9 +33,19 @@ class DynamicForm_Agentflow implements INode {
         this.version = 1.0
         this.type = 'DynamicForm'
         this.category = 'Agent Flows'
-        this.description = 'AI-driven dynamic form generator using Function Calling'
+        this.description = 'AI 驱动的动态表单生成器，根据输入内容自动分析并生成信息收集表单'
         this.color = '#FF6B6B'
         this.baseClasses = [this.type]
+        this.outputs = [
+            {
+                label: 'Proceed',
+                name: 'proceed'
+            },
+            {
+                label: 'Reject',
+                name: 'reject'
+            }
+        ]
         this.inputs = [
             {
                 label: 'Model',
@@ -42,6 +53,15 @@ class DynamicForm_Agentflow implements INode {
                 type: 'asyncOptions',
                 loadMethod: 'listModels',
                 loadConfig: true
+            },
+            {
+                label: 'Analysis Content',
+                name: 'dynamicFormAnalysisContent',
+                type: 'string',
+                description: 'Content to analyze for form generation (e.g., a job posting text to create an application form)',
+                placeholder: 'Paste or type the content you want to analyze here...',
+                acceptVariable: true,
+                rows: 6
             },
             {
                 label: 'System Prompt',
@@ -59,7 +79,8 @@ class DynamicForm_Agentflow implements INode {
                 description: 'Specify what information to collect (e.g., "Collect customer contact info")',
                 placeholder: 'e.g., Collect customer feedback about our service',
                 acceptVariable: true,
-                rows: 2
+                rows: 2,
+                optional: true
             },
             {
                 label: 'Enable Feedback',
@@ -98,16 +119,14 @@ class DynamicForm_Agentflow implements INode {
         const dynamicForm: IDynamicForm = typeof _dynamicForm === 'string' ? JSON.parse(_dynamicForm) : _dynamicForm
 
         const state = options.agentflowRuntime?.state as ICommonObject
-        const pastChatHistory = (options.pastChatHistory as BaseMessageLike[]) ?? []
-        const runtimeChatHistory = (options.agentflowRuntime?.chatHistory as BaseMessageLike[]) ?? []
 
         // Second run: Handle form submission
         if (dynamicForm) {
-            return this.handleFormSubmission(nodeData, dynamicForm, state, pastChatHistory, runtimeChatHistory, options)
+            return this.handleFormSubmission(nodeData, dynamicForm, state, options)
         }
 
         // First run: Generate form schema
-        return this.generateFormSchema(nodeData, input, state, pastChatHistory, runtimeChatHistory, options)
+        return this.generateFormSchema(nodeData, input, state, options)
     }
 
     // First run: Generate form schema using LLM
@@ -115,17 +134,20 @@ class DynamicForm_Agentflow implements INode {
         nodeData: INodeData,
         input: string,
         state: ICommonObject,
-        pastChatHistory: BaseMessageLike[],
-        runtimeChatHistory: BaseMessageLike[],
         options: ICommonObject
     ): Promise<any> {
         const model = nodeData.inputs?.dynamicFormModel as string
         const modelConfig = nodeData.inputs?.dynamicFormModelConfig as ICommonObject
+        const analysisContent = nodeData.inputs?.dynamicFormAnalysisContent as string
         const systemPrompt = nodeData.inputs?.dynamicFormPrompt as string || DEFAULT_DYNAMIC_FORM_COLLECTION_PROMPT
         const userPrompt = nodeData.inputs?.dynamicFormUserPrompt as string || ''
 
         if (!model || !modelConfig) {
             throw new Error('Model is required for Dynamic Form')
+        }
+
+        if (!analysisContent) {
+            throw new Error('Analysis Content is required for Dynamic Form')
         }
 
         // Dynamically load model (reuse LLM node pattern)
@@ -151,38 +173,21 @@ class DynamicForm_Agentflow implements INode {
         const formTool = this.createFormGenerationTool()
         const modelWithTools = llmNodeInstance.bindTools([formTool])
 
-        // 从聊天历史中提取上下文（核心依据）
-        const allMessages = [...pastChatHistory, ...runtimeChatHistory]
-        const conversationContext = allMessages.length > 0
-            ? allMessages.slice(-5).map((msg: any) => `${msg.role}: ${msg.content}`).join('\n')
-            : ''
-
-        // 构建完整提示词（优先级：系统提示词 > 对话上下文[核心] > 用户提示[辅助]）
+        // 构建完整提示词
         let fullPrompt = systemPrompt
 
-        // 添加对话上下文（核心依据 - 根据对话内容生成收集表）
-        if (conversationContext) {
-            fullPrompt += `\n\n## Conversation Context (Core - Generate form based on this)\n${conversationContext}`
-        }
+        // 添加分析内容（核心依据）
+        fullPrompt += `\n\n## Analysis Content (Core - Generate form based on this)\n${analysisContent}`
 
         // 添加用户提示（辅助指令 - 帮助指定收集表类型）
         if (userPrompt) {
             fullPrompt += `\n\n## User Prompt (Auxiliary - Form type guidance)\n${userPrompt}`
         }
 
-        // 构建用户消息内容
-        let userMessageContent = ''
-        if (allMessages.length > 0) {
-            const lastMessage = (allMessages[allMessages.length - 1] as any).content || ''
-            userMessageContent = lastMessage || input || 'Please generate an information collection form based on the conversation context.'
-        } else {
-            userMessageContent = input || 'Please generate an information collection form.'
-        }
-
         // 构建消息
         const messages = [
             { role: 'system', content: fullPrompt },
-            { role: 'user', content: userMessageContent }
+            { role: 'user', content: 'Please generate an information collection form based on the analysis content provided above.' }
         ]
 
         // Invoke LLM with tools bound
@@ -243,7 +248,7 @@ class DynamicForm_Agentflow implements INode {
         return {
             id: nodeData.id,
             name: this.name,
-            input: { messages: [...pastChatHistory, ...runtimeChatHistory] },
+            input: { analysisContent },
             output,
             state,
             chatHistory: [{ role: 'assistant', content: output.content }]
@@ -255,18 +260,18 @@ class DynamicForm_Agentflow implements INode {
         nodeData: INodeData,
         dynamicForm: IDynamicForm,
         state: ICommonObject,
-        pastChatHistory: BaseMessageLike[],
-        runtimeChatHistory: BaseMessageLike[],
         options: ICommonObject
     ): Promise<any> {
         const formSchema = nodeData.inputs?.formSchema as IFormSchema
         const dynamicFormEnableFeedback = nodeData.inputs?.dynamicFormEnableFeedback as boolean
 
         let validatedFormData: Record<string, any> = {}
+        let formDataText = ''
 
         if (dynamicForm.type === 'proceed' && formSchema) {
             const formData = dynamicForm.formData ?? {}
             validatedFormData = this.validateFormData(formData, formSchema)
+            formDataText = this.formatFormDataAsText(validatedFormData, formSchema)
         }
 
         // Use same pattern as HumanInput node for outcomes
@@ -275,12 +280,14 @@ class DynamicForm_Agentflow implements INode {
                 type: 'proceed',
                 startNodeId: dynamicForm.startNodeId,
                 feedback: dynamicFormEnableFeedback && dynamicForm.feedback ? dynamicForm.feedback : undefined,
+                formDataText: formDataText,
                 isFulfilled: false
             },
             {
                 type: 'reject',
                 startNodeId: dynamicForm.startNodeId,
                 feedback: dynamicFormEnableFeedback && dynamicForm.feedback ? dynamicForm.feedback : undefined,
+                formDataText: dynamicForm.type === 'reject' ? '用户拒绝填写表单' : '',
                 isFulfilled: false
             }
         ]
@@ -295,22 +302,11 @@ class DynamicForm_Agentflow implements INode {
                 break
         }
 
-        const messages = [
-            ...pastChatHistory,
-            ...runtimeChatHistory
-        ]
-
-        if (dynamicForm.feedback) {
-            messages.push({
-                role: 'user',
-                content: dynamicForm.feedback
-            })
-        }
-
-        const input = { messages, formData: dynamicForm.formData }
+        const input = { formData: dynamicForm.formData }
         const output = {
             conditions: outcomes,
-            formData: validatedFormData
+            formData: validatedFormData,
+            formDataText: formDataText
         }
 
         const nodeOutput: any = {
@@ -321,9 +317,12 @@ class DynamicForm_Agentflow implements INode {
             state
         }
 
-        if (dynamicForm.feedback && dynamicFormEnableFeedback) {
-            nodeOutput.chatHistory = [{ role: 'user', content: dynamicForm.feedback }]
-        }
+        // 生成更清晰的 chatHistory
+        const chatContent = dynamicForm.type === 'proceed'
+            ? `✅ 用户同意并提交表单：\n${formDataText}${dynamicForm.feedback ? `\n反馈：${dynamicForm.feedback}` : ''}`
+            : `❌ 用户拒绝${dynamicForm.feedback ? `：${dynamicForm.feedback}` : ''}`
+
+        nodeOutput.chatHistory = [{ role: 'user', content: chatContent }]
 
         return nodeOutput
     }
@@ -375,7 +374,24 @@ class DynamicForm_Agentflow implements INode {
                     break
 
                 case 'checkbox':
-                    validated[field.name] = value === true || value === 'true'
+                    // 如果有 options，则是多选复选框，验证数组
+                    if (field.options && field.options.length > 0) {
+                        const allowedValues = field.options.map(opt => opt.value)
+                        if (Array.isArray(value)) {
+                            // 验证每个值都在允许的选项中
+                            const invalidValues = value.filter(v => !allowedValues.includes(v))
+                            if (invalidValues.length > 0) {
+                                throw new Error(`Invalid values for '${field.label}': ${invalidValues.join(', ')}`)
+                            }
+                            validated[field.name] = value
+                        } else {
+                            // 如果不是数组但提供了值，尝试处理
+                            validated[field.name] = value ? [value] : []
+                        }
+                    } else {
+                        // 单个布尔复选框
+                        validated[field.name] = value === true || value === 'true'
+                    }
                     break
 
                 case 'text':
@@ -415,6 +431,71 @@ class DynamicForm_Agentflow implements INode {
         return validated
     }
 
+    /**
+     * 将表单数据格式化为可读文本
+     * @param formData 用户提交的表单数据
+     * @param formSchema 表单 schema（用于获取字段标签）
+     * @returns 格式化的文本
+     */
+    private formatFormDataAsText(formData: Record<string, any>, formSchema: IFormSchema): string {
+        if (!formData || Object.keys(formData).length === 0) {
+            return '（未填写任何内容）'
+        }
+
+        const lines: string[] = []
+
+        // 根据 formSchema 中的字段顺序格式化
+        for (const field of formSchema.fields) {
+            const value = formData[field.name]
+
+            if (value === undefined || value === null || value === '') {
+                continue  // 跳过未填写的字段
+            }
+
+            let displayValue: string
+
+            // 根据字段类型格式化值
+            switch (field.type) {
+                case 'checkbox':
+                    // 如果有 options，格式化为多选结果
+                    if (field.options && field.options.length > 0 && Array.isArray(value)) {
+                        if (value.length === 0) {
+                            displayValue = '（未选择）'
+                        } else {
+                            // 查找每个选中值的标签
+                            const selectedLabels = value.map(v => {
+                                const opt = field.options.find(o => o.value === v)
+                                return opt ? opt.label : v
+                            })
+                            displayValue = selectedLabels.join('、')
+                        }
+                    } else {
+                        // 单个布尔复选框
+                        displayValue = value ? '✓ 是' : '✗ 否'
+                    }
+                    break
+
+                case 'select':
+                case 'radio':
+                    // 查找选项的标签
+                    const option = field.options?.find(opt => opt.value === value)
+                    displayValue = option ? option.label : value
+                    break
+
+                case 'number':
+                    displayValue = String(value)
+                    break
+
+                default:
+                    displayValue = String(value)
+            }
+
+            lines.push(`${field.label}: ${displayValue}`)
+        }
+
+        return lines.length > 0 ? lines.join('\n') : '（未填写任何内容）'
+    }
+
     // Create Function Calling tool for form generation
     private createFormGenerationTool(): DynamicStructuredTool {
         const FormFieldOptionSchema = z.object({
@@ -446,7 +527,7 @@ class DynamicForm_Agentflow implements INode {
 
         return new DynamicStructuredTool({
             name: 'generateDynamicForm',
-            description: 'Generate a dynamic form schema based on user request and conversation context. Use this tool when the user asks to create a form, collect information, or gather input.',
+            description: '根据提供的分析内容生成动态表单结构。分析内容中隐含需要获取的信息点，提取这些信息并设计合适的表单字段。支持文本、邮箱、数字、下拉选择等多种字段类型。',
             schema: FormSchemaSchema,
             func: async (input) => JSON.stringify(input, null, 2)
         })

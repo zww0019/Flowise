@@ -1,10 +1,13 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(pnpm build:*)",
-      "Bash(pnpm install:*)",
-      "Bash(git checkout:*)",
-      "mcp__ide__getDiagnostics"
-    ]
+      "allow": [
+          "Bash(pnpm build:*)",
+          "Bash(pnpm install:*)",
+          "Bash(git checkout:*)",
+          "mcp__ide__getDiagnostics",
+          "Bash(pnpm run build)",
+          "WebSearch"
+      ],
+      "additionalDirectories": ["/Users/wwz/flowsechat"]
   }
 }

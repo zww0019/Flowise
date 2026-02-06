@@ -47,7 +47,7 @@ const ConnectionLine = ({ fromX, fromY, toX, toY, fromPosition, toPosition }) =>
     const theme = useTheme()
     const nodeName = (connectionHandleId || '').split('_')[0] || ''
 
-    const isLabelVisible = nodeName === 'humanInputAgentflow' || nodeName === 'conditionAgentflow' || nodeName === 'conditionAgentAgentflow'
+    const isLabelVisible = nodeName === 'humanInputAgentflow' || nodeName === 'dynamicFormAgentflow' || nodeName === 'conditionAgentflow' || nodeName === 'conditionAgentAgentflow'
 
     const getEdgeLabel = () => {
         let edgeLabel = undefined
@@ -56,6 +56,11 @@ const ConnectionLine = ({ fromX, fromY, toX, toY, fromPosition, toPosition }) =>
             edgeLabel = (isNaN(_edgeLabel) ? 0 : _edgeLabel).toString()
         }
         if (nodeName === 'humanInputAgentflow') {
+            const _edgeLabel = connectionHandleId.split('-').pop()
+            edgeLabel = (isNaN(_edgeLabel) ? 0 : _edgeLabel).toString()
+            edgeLabel = edgeLabel === '0' ? 'proceed' : 'reject'
+        }
+        if (nodeName === 'dynamicFormAgentflow') {
             const _edgeLabel = connectionHandleId.split('-').pop()
             edgeLabel = (isNaN(_edgeLabel) ? 0 : _edgeLabel).toString()
             edgeLabel = edgeLabel === '0' ? 'proceed' : 'reject'
@@ -80,7 +85,7 @@ const ConnectionLine = ({ fromX, fromY, toX, toY, fromPosition, toPosition }) =>
                 <EdgeLabelRenderer>
                     <EdgeLabel
                         color={color}
-                        isHumanInput={nodeName === 'humanInputAgentflow'}
+                        isHumanInput={nodeName === 'humanInputAgentflow' || nodeName === 'dynamicFormAgentflow'}
                         label={getEdgeLabel()}
                         transform={`translate(-50%, 0%) translate(${fromX}px,${fromY}px)`}
                     />

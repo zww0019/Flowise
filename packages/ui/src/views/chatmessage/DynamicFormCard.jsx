@@ -50,7 +50,9 @@ const DynamicFormCard = ({ formSchema, onSubmit, customization, disabled, initia
             if (field.defaultValue !== undefined) {
                 initialData[field.name] = field.defaultValue
             } else if (field.type === 'checkbox') {
-                initialData[field.name] = false
+                // 如果有 options，初始化为空数组（多选）
+                // 否则初始化为 false（单个布尔复选框）
+                initialData[field.name] = (field.options && field.options.length > 0) ? [] : false
             } else {
                 initialData[field.name] = ''
             }
@@ -72,8 +74,19 @@ const DynamicFormCard = ({ formSchema, onSubmit, customization, disabled, initia
             if (value === undefined || value === null || value === '') {
                 return `${field.label}是必填项`
             }
-            if (field.type === 'checkbox' && !value) {
-                return `${field.label}是必填项`
+            // Checkbox 类型验证
+            if (field.type === 'checkbox') {
+                // 如果有 options，检查数组是否有选择
+                if (field.options && field.options.length > 0) {
+                    if (!Array.isArray(value) || value.length === 0) {
+                        return `${field.label}是必填项`
+                    }
+                } else {
+                    // 单个布尔复选框
+                    if (!value) {
+                        return `${field.label}是必填项`
+                    }
+                }
             }
         }
 
@@ -292,6 +305,40 @@ const DynamicFormCard = ({ formSchema, onSubmit, customization, disabled, initia
                 )
 
             case 'checkbox':
+                // 如果有 options，渲染为多选复选框组
+                if (field.options && field.options.length > 0) {
+                    const selectedValues = Array.isArray(value) ? value : []
+                    return (
+                        <FormControl key={field.name} error={!!error} fullWidth>
+                            <Typography variant="body2" sx={{ mb: 1 }}>
+                                {field.label}
+                                {field.required && <span style={{ color: theme.palette.error.main }}> *</span>}
+                            </Typography>
+                            <Stack direction="column" spacing={1}>
+                                {field.options.map((option) => (
+                                    <FormControlLabel
+                                        key={option.value}
+                                        control={
+                                            <Checkbox
+                                                checked={selectedValues.includes(option.value)}
+                                                disabled={isSubmitted || disabled}
+                                                onChange={(e) => {
+                                                    const newValues = e.target.checked
+                                                        ? [...selectedValues, option.value]
+                                                        : selectedValues.filter((v) => v !== option.value)
+                                                    handleFieldChange(field.name, newValues)
+                                                }}
+                                            />
+                                        }
+                                        label={option.label}
+                                    />
+                                ))}
+                            </Stack>
+                            {(error || field.description) && <FormHelperText>{error || field.description}</FormHelperText>}
+                        </FormControl>
+                    )
+                }
+                // 否则渲染为单个布尔复选框
                 return (
                     <FormControl key={field.name} error={!!error}>
                         <FormControlLabel
