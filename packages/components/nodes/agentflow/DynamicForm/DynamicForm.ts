@@ -464,7 +464,7 @@ class DynamicForm_Agentflow implements INode {
                         } else {
                             // 查找每个选中值的标签
                             const selectedLabels = value.map(v => {
-                                const opt = field.options.find(o => o.value === v)
+                                const opt = field.options!.find(o => o.value === v)
                                 return opt ? opt.label : v
                             })
                             displayValue = selectedLabels.join('、')

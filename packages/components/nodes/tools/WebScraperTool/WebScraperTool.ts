@@ -6,6 +6,7 @@ import fetch from 'node-fetch'
 import { URL } from 'url'
 import { ICommonObject, INode, INodeData, INodeParams } from '../../../src/Interface'
 import { getBaseClasses, xmlScrape } from '../../../src/utils'
+import { secureFetch } from '../../../src/httpSecurity'
 
 interface ScrapedPageData {
     url: string
