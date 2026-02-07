@@ -171,6 +171,15 @@ class NanoBanana_Tools implements INode {
 }`
             },
             {
+                label: 'Base URL',
+                name: 'baseUrl',
+                type: 'string',
+                optional: true,
+                additionalParams: true,
+                description: 'Custom API base URL (default: https://generativelanguage.googleapis.com/v1beta)',
+                placeholder: 'https://generativelanguage.googleapis.com/v1beta'
+            },
+            {
                 label: 'Tool Name',
                 name: 'toolName',
                 type: 'string',
@@ -229,9 +238,12 @@ class NanoBanana_Tools implements INode {
             }
         }
 
+        const baseUrl = nodeData.inputs?.baseUrl as string
+
         const config: NanoBananaConfig = {
             apiKey,
             modelVersion: modelVersion as '2' | '3',
+            baseUrl,
             aspectRatio,
             temperature,
             maxOutputTokens,

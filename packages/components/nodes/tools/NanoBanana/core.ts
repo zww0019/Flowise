@@ -15,6 +15,7 @@ export interface NanoBananaConfig {
     stopSequences?: string[]
     responseMimeType?: string
     customGenerationConfig?: string
+    baseUrl?: string
 }
 
 // Schema for text-to-image
@@ -69,9 +70,9 @@ export class NanoBananaTool extends StructuredTool {
                 ? 'gemini-3-pro-image-preview' 
                 : 'gemini-2.5-flash-image'
 
-            // Build API URL - using official Google API endpoint
-            // According to docs: https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`
+            // Build API URL - support custom base URL for proxy/gateway
+            const baseUrl = (this.config.baseUrl || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '')
+            const apiUrl = `${baseUrl}/models/${modelName}:generateContent`
 
             // Prepare contents array
             const parts: any[] = []
